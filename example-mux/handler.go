@@ -23,20 +23,20 @@ type Todo struct {
     Body   string `json:"body"`
 }
 
-func (h *profileHandler) CreateTodo(c *gin.Context) {
+func (h *profileHandler) CreateTodo(w http.ResponseWriter, r *http.Request) {
     var td Todo
-    if err := c.ShouldBindJSON(&td); err != nil {
-        c.JSON(http.StatusUnprocessableEntity, "invalid json")
+    if err := authr.ShouldBindJSON(r, &td); err != nil {
+        authr.JSON(w, http.StatusUnprocessableEntity, "invalid json")
         return
     }
-    metadata, err := h.tk.ExtractTokenMetadata(c.Request)
+    metadata, err := h.tk.ExtractTokenMetadata(r)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
-    authInfo, err := h.rd.FetchAuth(c, metadata.TokenUuid)
+    authInfo, err := h.rd.FetchAuth(r.Context(), metadata.TokenUuid)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
 
@@ -49,14 +49,14 @@ func (h *profileHandler) CreateTodo(c *gin.Context) {
 
     //you can proceed to save the  to a database
 
-    c.JSON(http.StatusCreated, td)
+    authr.JSON(w, http.StatusCreated, td)
 }
 
-func (h *profileHandler) PublicContent(c *gin.Context) {
+func (h *profileHandler) PublicContent(w http.ResponseWriter, r *http.Request) {
     var authInfo *authr.AuthTokens
-    metadata, err := h.tk.ExtractTokenMetadata(c.Request)
+    metadata, err := h.tk.ExtractTokenMetadata(r)
     if err == nil {
-        authInfo, err = h.rd.FetchAuth(c, metadata.TokenUuid)
+        authInfo, err = h.rd.FetchAuth(r.Context(), metadata.TokenUuid)
     }
 
     if authInfo == nil {
@@ -64,7 +64,7 @@ func (h *profileHandler) PublicContent(c *gin.Context) {
             "code":    http.StatusOK,
             "message": fmt.Sprintf("hello PublicContent"),
         }
-        c.JSON(http.StatusOK, data)
+        authr.JSON(w, http.StatusOK, data)
         return
     }
 
@@ -80,18 +80,18 @@ func (h *profileHandler) PublicContent(c *gin.Context) {
             data[k] = v
         }
     }
-    c.JSON(http.StatusOK, data)
+    authr.JSON(w, http.StatusOK, data)
 }
 
-func (h *profileHandler) UserBoard(c *gin.Context) {
-    metadata, err := h.tk.ExtractTokenMetadata(c.Request)
+func (h *profileHandler) UserBoard(w http.ResponseWriter, r *http.Request) {
+    metadata, err := h.tk.ExtractTokenMetadata(r)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
-    authInfo, err := h.rd.FetchAuth(c, metadata.TokenUuid)
+    authInfo, err := h.rd.FetchAuth(r.Context(), metadata.TokenUuid)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
 
@@ -107,18 +107,18 @@ func (h *profileHandler) UserBoard(c *gin.Context) {
         data[k] = v
     }
 
-    c.JSON(http.StatusOK, data)
+    authr.JSON(w, http.StatusOK, data)
 }
 
-func (h *profileHandler) ModeratorBoard(c *gin.Context) {
-    metadata, err := h.tk.ExtractTokenMetadata(c.Request)
+func (h *profileHandler) ModeratorBoard(w http.ResponseWriter, r *http.Request) {
+    metadata, err := h.tk.ExtractTokenMetadata(r)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
-    authInfo, err := h.rd.FetchAuth(c, metadata.TokenUuid)
+    authInfo, err := h.rd.FetchAuth(r.Context(), metadata.TokenUuid)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
 
@@ -134,19 +134,19 @@ func (h *profileHandler) ModeratorBoard(c *gin.Context) {
         data[k] = v
     }
 
-    c.JSON(http.StatusOK, data)
+    authr.JSON(w, http.StatusOK, data)
 
 }
 
-func (h *profileHandler) AdminBoard(c *gin.Context) {
-    metadata, err := h.tk.ExtractTokenMetadata(c.Request)
+func (h *profileHandler) AdminBoard(w http.ResponseWriter, r *http.Request) {
+    metadata, err := h.tk.ExtractTokenMetadata(r)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
-    authInfo, err := h.rd.FetchAuth(c, metadata.TokenUuid)
+    authInfo, err := h.rd.FetchAuth(r.Context(), metadata.TokenUuid)
     if err != nil {
-        c.JSON(http.StatusUnauthorized, "unauthorized")
+        authr.JSON(w, http.StatusUnauthorized, "unauthorized")
         return
     }
     data := gin.H{
@@ -161,5 +161,5 @@ func (h *profileHandler) AdminBoard(c *gin.Context) {
         data[k] = v
     }
 
-    c.JSON(http.StatusOK, data)
+    authr.JSON(w, http.StatusOK, data)
 }

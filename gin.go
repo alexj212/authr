@@ -4,14 +4,36 @@ import (
     "fmt"
     "github.com/dgrijalva/jwt-go"
     "github.com/gin-gonic/gin"
+
     "net/http"
 )
 
-func (s *service) Login(c *gin.Context) {
+// GinAdapter gin func exposed
+type GinAdapter interface {
+    Login(c *gin.Context)
+    Register(c *gin.Context)
+    Logout(c *gin.Context)
+    Refresh(c *gin.Context)
+    Whoami(c *gin.Context)
+    Sessions(c *gin.Context)
+    TokenAuthMiddleware() gin.HandlerFunc
+}
 
-    metadata, _ := s.ts.ExtractTokenMetadata(c.Request)
+type ginAdapter struct {
+    s AuthService
+}
+
+// NewGinAdapter create new auth service
+func NewGinAdapter(s AuthService) GinAdapter {
+    a := &ginAdapter{s: s}
+    return a
+}
+
+func (g *ginAdapter) Login(c *gin.Context) {
+
+    metadata, _ := g.s.ExtractTokenMetadata(c.Request)
     if metadata != nil {
-        deleteErr := s.DeleteTokens(c, metadata)
+        deleteErr := g.s.DeleteTokens(c, metadata)
         if deleteErr != nil {
             c.JSON(http.StatusBadRequest, deleteErr.Error())
             return
@@ -24,7 +46,7 @@ func (s *service) Login(c *gin.Context) {
         return
     }
 
-    user, err := s.LoginUser(c, &loginArgs)
+    user, err := g.s.LoginUser(c, &loginArgs)
     if err != nil {
         c.JSON(http.StatusUnprocessableEntity, err.Error())
         return
@@ -35,12 +57,12 @@ func (s *service) Login(c *gin.Context) {
         c.JSON(http.StatusUnauthorized, "Please provide valid login details")
         return
     }
-    ts, err := s.ts.CreateToken(user)
+    ts, err := g.s.CreateToken(user)
     if err != nil {
         c.JSON(http.StatusUnprocessableEntity, err.Error())
         return
     }
-    saveErr := s.SaveAuth(c, user.ID, ts)
+    saveErr := g.s.SaveAuth(c, user.ID, ts)
     if saveErr != nil {
         c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
         return
@@ -49,9 +71,9 @@ func (s *service) Login(c *gin.Context) {
     c.JSON(http.StatusOK, ts)
 }
 
-func (s *service) Register(c *gin.Context) {
+func (g *ginAdapter) Register(c *gin.Context) {
 
-    metadata, _ := s.ts.ExtractTokenMetadata(c.Request)
+    metadata, _ := g.s.ExtractTokenMetadata(c.Request)
     if metadata != nil {
         c.JSON(http.StatusUnauthorized, "unable to register - user is logged in")
         return
@@ -63,7 +85,7 @@ func (s *service) Register(c *gin.Context) {
         return
     }
 
-    user, err := s.RegisterUser(c, &regArgs)
+    user, err := g.s.RegisterUser(c, &regArgs)
     if err != nil {
         c.JSON(http.StatusUnprocessableEntity, "error occurred")
         return
@@ -74,12 +96,12 @@ func (s *service) Register(c *gin.Context) {
         return
     }
 
-    ts, err := s.ts.CreateToken(user)
+    ts, err := g.s.CreateToken(user)
     if err != nil {
         c.JSON(http.StatusUnprocessableEntity, err.Error())
         return
     }
-    saveErr := s.SaveAuth(c, user.ID, ts)
+    saveErr := g.s.SaveAuth(c, user.ID, ts)
     if saveErr != nil {
         c.JSON(http.StatusUnprocessableEntity, saveErr.Error())
         return
@@ -88,11 +110,11 @@ func (s *service) Register(c *gin.Context) {
     c.JSON(http.StatusOK, ts)
 }
 
-func (s *service) Logout(c *gin.Context) {
+func (g *ginAdapter) Logout(c *gin.Context) {
     //If metadata is passed and the tokens valid, delete them from the redis store
-    metadata, _ := s.ts.ExtractTokenMetadata(c.Request)
+    metadata, _ := g.s.ExtractTokenMetadata(c.Request)
     if metadata != nil {
-        deleteErr := s.DeleteTokens(c, metadata)
+        deleteErr := g.s.DeleteTokens(c, metadata)
         if deleteErr != nil {
             c.JSON(http.StatusBadRequest, deleteErr.Error())
             return
@@ -101,7 +123,7 @@ func (s *service) Logout(c *gin.Context) {
     c.JSON(http.StatusOK, "Successfully logged out")
 }
 
-func (s *service) Refresh(c *gin.Context) {
+func (g *ginAdapter) Refresh(c *gin.Context) {
     mapToken := map[string]string{}
     if err := c.ShouldBindJSON(&mapToken); err != nil {
         c.JSON(http.StatusUnprocessableEntity, err.Error())
@@ -114,7 +136,7 @@ func (s *service) Refresh(c *gin.Context) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
         }
-        return []byte(s.ts.RefreshSecret()), nil
+        return []byte(g.s.RefreshSecret()), nil
     })
     //if there is an error, the token must have expired
     if err != nil {
@@ -140,26 +162,26 @@ func (s *service) Refresh(c *gin.Context) {
             return
         }
         //Delete the previous Refresh Token
-        delErr := s.DeleteRefresh(c, refreshUuid)
+        delErr := g.s.DeleteRefresh(c, refreshUuid)
         if delErr != nil { //if any goes wrong
             c.JSON(http.StatusUnauthorized, "unauthorized")
             return
         }
 
-        user, err := s.LoadUser(c, userId)
+        user, err := g.s.LoadUser(c, userId)
         if err != nil {
             c.JSON(http.StatusForbidden, err.Error())
             return
         }
 
         //Create new pairs of refresh and access tokens
-        ts, createErr := s.ts.RefreshToken(user, claims)
+        ts, createErr := g.s.RefreshToken(user, claims)
         if createErr != nil {
             c.JSON(http.StatusForbidden, createErr.Error())
             return
         }
         //save the token's metadata to redis
-        saveErr := s.SaveAuth(c, userId, ts)
+        saveErr := g.s.SaveAuth(c, userId, ts)
         if saveErr != nil {
             c.JSON(http.StatusForbidden, saveErr.Error())
             return
@@ -171,9 +193,9 @@ func (s *service) Refresh(c *gin.Context) {
     }
 }
 
-func (s *service) Whoami(c *gin.Context) {
+func (g *ginAdapter) Whoami(c *gin.Context) {
     //If metadata is passed and the tokens valid, delete them from the redis store
-    metadata, _ := s.ts.ExtractTokenMetadata(c.Request)
+    metadata, _ := g.s.ExtractTokenMetadata(c.Request)
     if metadata != nil {
 
         data := gin.H{
@@ -191,9 +213,9 @@ func (s *service) Whoami(c *gin.Context) {
     c.JSON(http.StatusUnauthorized, data)
 }
 
-func (s *service) Sessions(c *gin.Context) {
+func (g *ginAdapter) Sessions(c *gin.Context) {
     //If metadata is passed and the tokens valid, delete them from the redis store
-    metadata, _ := s.ts.ExtractTokenMetadata(c.Request)
+    metadata, _ := g.s.ExtractTokenMetadata(c.Request)
     if metadata != nil {
 
         data := gin.H{
@@ -209,4 +231,16 @@ func (s *service) Sessions(c *gin.Context) {
         "message": fmt.Sprintf("not logged in"),
     }
     c.JSON(http.StatusUnauthorized, data)
+}
+
+func (g *ginAdapter) TokenAuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        err := g.s.TokenValid(c.Request)
+        if err != nil {
+            c.JSON(http.StatusUnauthorized, "unauthorized")
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
 }

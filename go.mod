@@ -1,4 +1,4 @@
-module authr
+module github.com/alexj212/authr
 
 go 1.18
 
@@ -13,6 +13,13 @@ require (
 	gorm.io/driver/mysql v1.3.3
 	gorm.io/driver/sqlite v1.3.1
 	gorm.io/gorm v1.23.4
+)
+
+require (
+	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/gorilla/handlers v1.5.1 // indirect
+	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/rs/cors v1.8.2 // indirect
 )
 
 require (

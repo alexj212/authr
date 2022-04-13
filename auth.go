@@ -5,9 +5,10 @@ import (
     "errors"
     "fmt"
     "github.com/davecgh/go-spew/spew"
-    "github.com/gin-gonic/gin"
+    "github.com/dgrijalva/jwt-go"
     "golang.org/x/crypto/bcrypt"
     "gorm.io/gorm"
+    "net/http"
     "os"
     "time"
 )
@@ -17,6 +18,7 @@ type DbProvider func() (*gorm.DB, error)
 
 // AuthService service
 type AuthService interface {
+    LoadUser(c context.Context, ID string) (*User, error)
     SaveAuth(context.Context, string, *TokenDetails) error
     FetchAuth(context.Context, string) (*AuthTokens, error)
     DeleteRefresh(context.Context, string) error
@@ -24,27 +26,39 @@ type AuthService interface {
     RegisterUser(context.Context, *RegistrationParams) (*User, error)
     LoginUser(c context.Context, args *LoginParams) (*User, error)
 
-    Login(c *gin.Context)
-    Register(c *gin.Context)
-    Logout(c *gin.Context)
-    Refresh(c *gin.Context)
-    Whoami(c *gin.Context)
-    Sessions(c *gin.Context)
+    // proxied token calls
+    CreateToken(u *User) (*TokenDetails, error)
+    RefreshToken(u *User, claims jwt.MapClaims) (*TokenDetails, error)
+    ExtractTokenMetadata(*http.Request) (*AccessDetails, error)
+    RefreshSecret() string
+    TokenValid(r *http.Request) error
+}
+
+type LoginFailure func(*http.Request, string)
+type TokenGranted func(*http.Request, *TokenDetails)
+type TokenRevoked func(*http.Request, *TokenDetails)
+
+type AuthReporter struct {
+    loginFailure LoginFailure
+    tokenGranted TokenGranted
+    tokenRevoked TokenRevoked
 }
 
 type service struct {
     ts TokenInterface
     db *gorm.DB
+    r  *AuthReporter
 }
 
-func NewAuthService(ts TokenInterface, db *gorm.DB) AuthService {
-    svc := &service{ts: ts, db: db}
-    svc.InitialMigration()
-    return svc
+// NewAuthService create new auth service
+func NewAuthService(ts TokenInterface, db *gorm.DB, r *AuthReporter) (AuthService, error) {
+    s := &service{ts: ts, db: db, r: r}
+    err := s.InitialMigration()
+    return s, err
 }
 
 // SaveAuth metadata to Redis
-func (s *service) SaveAuth(ctx context.Context, userId string, td *TokenDetails) error {
+func (s *service) SaveAuth(c context.Context, userId string, td *TokenDetails) error {
 
     at := AuthTokens{
         Expires:   time.Unix(td.AtExpires, 0),
@@ -78,7 +92,7 @@ func (s *service) SaveAuth(ctx context.Context, userId string, td *TokenDetails)
 }
 
 // FetchAuth Check the metadata saved
-func (s *service) FetchAuth(ctx context.Context, tokenUuid string) (*AuthTokens, error) {
+func (s *service) FetchAuth(c context.Context, tokenUuid string) (*AuthTokens, error) {
 
     info := &AuthTokens{}
 
@@ -99,7 +113,7 @@ func (s *service) FetchAuth(ctx context.Context, tokenUuid string) (*AuthTokens,
 }
 
 // FetchHistory fetch history
-func (s *service) FetchHistory(ctx context.Context, UserId string) ([]AuthTokens, error) {
+func (s *service) FetchHistory(c context.Context, UserId string) ([]AuthTokens, error) {
     var tokens []AuthTokens
 
     if err := s.db.Where("user_id = ?", UserId).Find(tokens).Error; err != nil {
@@ -113,7 +127,7 @@ func (s *service) FetchHistory(ctx context.Context, UserId string) ([]AuthTokens
 }
 
 // DeleteTokens Once a user row in the token table
-func (s *service) DeleteTokens(ctx context.Context, authD *AccessDetails) error {
+func (s *service) DeleteTokens(c context.Context, authD *AccessDetails) error {
     //get the refresh uuid
     refreshUuid := fmt.Sprintf("%s++%s", authD.TokenUuid, authD.UserId)
     //delete access token
@@ -133,7 +147,7 @@ func (s *service) DeleteTokens(ctx context.Context, authD *AccessDetails) error 
 }
 
 // DeleteRefresh remove refresh token
-func (s *service) DeleteRefresh(ctx context.Context, refreshUuid string) error {
+func (s *service) DeleteRefresh(c context.Context, refreshUuid string) error {
     //delete refresh token
     err := s.db.Where("token_uuid = ?", refreshUuid).Delete(&AuthTokens{}).Error
     if err != nil {
@@ -155,4 +169,22 @@ func GeneratePasswordHash(password string) (string, error) {
 func CheckPasswordHash(password, hash string) bool {
     err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
     return err == nil
+}
+
+func (s *service) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
+    return s.ts.ExtractTokenMetadata(r)
+}
+
+func (s *service) CreateToken(u *User) (*TokenDetails, error) {
+    return s.ts.CreateToken(u)
+}
+func (s *service) RefreshToken(u *User, claims jwt.MapClaims) (*TokenDetails, error) {
+    return s.ts.RefreshToken(u, claims)
+}
+
+func (s *service) RefreshSecret() string {
+    return s.ts.RefreshSecret()
+}
+func (s *service) TokenValid(r *http.Request) error {
+    return s.ts.TokenValid(r)
 }

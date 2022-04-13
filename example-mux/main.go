@@ -4,17 +4,17 @@ import (
     "context"
     "fmt"
     "github.com/alexj212/authr"
-    "github.com/gin-contrib/cors"
-    "github.com/gin-gonic/gin"
-    "gorm.io/driver/sqlite"
-    "gorm.io/gorm/logger"
 
+    "github.com/gorilla/mux"
+    "github.com/rs/cors"
+    "gorm.io/driver/sqlite"
     _ "gorm.io/driver/sqlite"
     "gorm.io/gorm"
-
-    "github.com/joho/godotenv"
+    "gorm.io/gorm/logger"
     "log"
     "net/http"
+
+    "github.com/joho/godotenv"
     "os"
     "os/signal"
     "time"
@@ -37,51 +37,53 @@ func main() {
         log.Fatal("GetDatabase error:", err)
     }
 
-    report := &authr.AuthReporter{}
-
     var ts = authr.NewTokenService(accessSecret, refreshSecret)
+
+    report := &authr.AuthReporter{}
     as, err := authr.NewAuthService(ts, db, report)
-    g := authr.NewGinAdapter(as)
+    g := authr.NewHttpAdapter(as)
 
     var service = NewProfile(as, ts)
 
-    var router = gin.Default()
+    router := mux.NewRouter()
     // CORS for https://foo.com and https://github.com origins, allowing:
     // - PUT and PATCH methods
     // - Origin header
     // - Credentials share
     // - Preflight requests cached for 12 hours
-    router.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"*"},
-        AllowMethods:     []string{"*"},
-        AllowHeaders:     []string{"*"},
-        ExposeHeaders:    []string{"Content-Length"},
+    c := cors.New(cors.Options{
+        AllowedOrigins:   []string{"*"},
+        AllowedMethods:   []string{"*"},
+        AllowedHeaders:   []string{"*"},
+        ExposedHeaders:   []string{"Content-Length"},
         AllowCredentials: true,
         AllowOriginFunc: func(origin string) bool {
             return true
         },
-        MaxAge: 12 * time.Hour,
-    }))
+        // MaxAge: 12 * time.Hour,
+    })
 
-    router.POST("/login", g.Login)
-    router.POST("/refresh", g.Refresh)
-    router.POST("/register", g.Register)
-    router.POST("/logout", g.Logout)
-    router.GET("/whoami", g.Whoami)
-    router.GET("/sessions", g.Sessions)
+    router.HandleFunc("/login", g.Login).Methods("POST")
+    router.HandleFunc("/refresh", g.Refresh).Methods("POST")
+    router.HandleFunc("/register", g.Register).Methods("POST")
+    router.HandleFunc("/logout", g.Logout).Methods("POST")
+    router.HandleFunc("/whoami", g.Whoami).Methods("GET")
+    router.HandleFunc("/sessions", g.Sessions).Methods("GET")
 
-    router.POST("/todo", g.TokenAuthMiddleware(), service.CreateTodo)
-    router.GET("/todo", g.TokenAuthMiddleware(), service.CreateTodo)
+    router.Handle("/todo", g.TokenAuthMiddleware(http.HandlerFunc(service.CreateTodo))).Methods("POST")
+    router.Handle("/todo", g.TokenAuthMiddleware(http.HandlerFunc(service.CreateTodo))).Methods("GET")
 
     //router.POST("/api", service.Api)
-    router.GET("/api/test/all", service.PublicContent)
-    router.GET("/api/test/user", g.TokenAuthMiddleware(), service.UserBoard)
-    router.GET("/api/test/mod", g.TokenAuthMiddleware(), service.ModeratorBoard)
-    router.GET("/api/test/admin", g.TokenAuthMiddleware(), service.AdminBoard)
+    router.Handle("/api/test/all", http.HandlerFunc(service.PublicContent)).Methods("GET")
+    router.Handle("/api/test/user", g.TokenAuthMiddleware(http.HandlerFunc(service.UserBoard))).Methods("GET")
+    router.Handle("/api/test/mod", g.TokenAuthMiddleware(http.HandlerFunc(service.ModeratorBoard))).Methods("GET")
+    router.Handle("/api/test/admin", g.TokenAuthMiddleware(http.HandlerFunc(service.AdminBoard))).Methods("GET")
+
+    handler := c.Handler(router)
 
     srv := &http.Server{
         Addr:    appAddr,
-        Handler: router,
+        Handler: handler,
     }
     go func() {
         if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

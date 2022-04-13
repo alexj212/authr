@@ -18,6 +18,11 @@
         <li class="nav-item">
           <router-link v-if="currentUser" to="/user" class="nav-link">User</router-link>
         </li>
+
+        <li class="nav-item">
+          <router-link v-if="currentUser" to="/terminal" class="nav-link">Terminal</router-link>
+        </li>
+
       </div>
 
       <div v-if="!currentUser" class="navbar-nav ml-auto">
@@ -42,6 +47,7 @@
             {{ currentUser.username }}
           </router-link>
         </li>
+
         <li class="nav-item">
           <a class="nav-link" href @click.prevent="logOut">
             <font-awesome-icon icon="sign-out-alt"/>

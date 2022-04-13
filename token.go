@@ -18,13 +18,13 @@ const (
     JwtRole        = "role"
 )
 
-type tokenservice struct {
+type tokenService struct {
     accessSecret  string
     refreshSecret string
 }
 
 func NewTokenService(accessSecret, refreshSecret string) TokenInterface {
-    return &tokenservice{accessSecret: accessSecret, refreshSecret: refreshSecret}
+    return &tokenService{accessSecret: accessSecret, refreshSecret: refreshSecret}
 }
 
 type TokenInterface interface {
@@ -36,13 +36,13 @@ type TokenInterface interface {
 }
 
 //Token implements the TokenInterface
-var _ TokenInterface = &tokenservice{}
+var _ TokenInterface = &tokenService{}
 
-func (t *tokenservice) RefreshSecret() string {
+func (t *tokenService) RefreshSecret() string {
     return t.refreshSecret
 }
 
-func (t *tokenservice) CreateToken(u *User) (*TokenDetails, error) {
+func (t *tokenService) CreateToken(u *User) (*TokenDetails, error) {
     td := &TokenDetails{}
     td.ID = u.ID
     td.Email = u.Email
@@ -99,7 +99,7 @@ func (t *tokenservice) CreateToken(u *User) (*TokenDetails, error) {
     return td, nil
 }
 
-func (t *tokenservice) RefreshToken(u *User, claims jwt.MapClaims) (*TokenDetails, error) {
+func (t *tokenService) RefreshToken(u *User, claims jwt.MapClaims) (*TokenDetails, error) {
     td := &TokenDetails{}
     td.ID = u.ID
     td.Email = u.Email
@@ -156,7 +156,7 @@ func (t *tokenservice) RefreshToken(u *User, claims jwt.MapClaims) (*TokenDetail
 
 }
 
-func (t *tokenservice) TokenValid(r *http.Request) error {
+func (t *tokenService) TokenValid(r *http.Request) error {
     token, err := t.verifyToken(r)
     if err != nil {
         return err
@@ -167,7 +167,7 @@ func (t *tokenservice) TokenValid(r *http.Request) error {
     return nil
 }
 
-func (t *tokenservice) verifyToken(r *http.Request) (*jwt.Token, error) {
+func (t *tokenService) verifyToken(r *http.Request) (*jwt.Token, error) {
     tokenString := t.extractToken(r)
     token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -182,7 +182,7 @@ func (t *tokenservice) verifyToken(r *http.Request) (*jwt.Token, error) {
 }
 
 //get the token from the request body
-func (t *tokenservice) extractToken(r *http.Request) string {
+func (t *tokenService) extractToken(r *http.Request) string {
     bearToken := r.Header.Get("Authorization")
     strArr := strings.Split(bearToken, " ")
     if len(strArr) == 2 {
@@ -191,7 +191,7 @@ func (t *tokenservice) extractToken(r *http.Request) string {
     return ""
 }
 
-func (t *tokenservice) extract(token *jwt.Token) (*AccessDetails, error) {
+func (t *tokenService) extract(token *jwt.Token) (*AccessDetails, error) {
 
     claims, ok := token.Claims.(jwt.MapClaims)
     if !ok || !token.Valid {
@@ -221,7 +221,7 @@ func (t *tokenservice) extract(token *jwt.Token) (*AccessDetails, error) {
 
 }
 
-func (t *tokenservice) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
+func (t *tokenService) ExtractTokenMetadata(r *http.Request) (*AccessDetails, error) {
     token, err := t.verifyToken(r)
     if err != nil {
         return nil, err

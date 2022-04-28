@@ -37,14 +37,6 @@ func main() {
         log.Fatal("GetDatabase error:", err)
     }
 
-    report := &authr.AuthReporter{}
-
-    var ts = authr.NewTokenService(accessSecret, refreshSecret)
-    as, err := authr.NewAuthService(ts, db, report)
-    g := authr.NewGinAdapter(as)
-
-    var service = NewProfile(as, ts)
-
     var router = gin.Default()
     // CORS for https://foo.com and https://github.com origins, allowing:
     // - PUT and PATCH methods
@@ -62,6 +54,13 @@ func main() {
         },
         MaxAge: 12 * time.Hour,
     }))
+
+    report := &authr.AuthReporter{}
+    var ts = authr.NewTokenService(accessSecret, refreshSecret)
+    as, err := authr.NewAuthService(ts, db, report)
+    g := authr.NewGinAdapter(as)
+
+    var service = NewProfile(as, ts)
 
     router.POST("/login", g.Login)
     router.POST("/refresh", g.Refresh)

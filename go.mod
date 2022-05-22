@@ -7,19 +7,14 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.7.7
+	github.com/gorilla/mux v1.8.0
 	github.com/joho/godotenv v1.4.0
+	github.com/rs/cors v1.8.2
 	github.com/twinj/uuid v1.0.0
 	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
 	gorm.io/driver/mysql v1.3.3
 	gorm.io/driver/sqlite v1.3.1
 	gorm.io/gorm v1.23.4
-)
-
-require (
-	github.com/felixge/httpsnoop v1.0.1 // indirect
-	github.com/gorilla/handlers v1.5.1 // indirect
-	github.com/gorilla/mux v1.8.0 // indirect
-	github.com/rs/cors v1.8.2 // indirect
 )
 
 require (

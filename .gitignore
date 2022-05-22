@@ -1,3 +1,6 @@
 .DS_Store
 .idea
 venv
+go.work
+go.work.sum
+go.sum

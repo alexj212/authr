@@ -4,3 +4,4 @@ venv
 go.work
 go.work.sum
 go.sum
+bin
